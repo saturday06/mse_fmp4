@@ -42,8 +42,12 @@ impl Mp4Box for FileTypeBox {
         Ok(8)
     }
     fn write_box_payload<W: Write>(&self, mut writer: W) -> Result<()> {
-        write_all!(writer, b"isom"); // major_brand
-        write_u32!(writer, 512); // minor_version
+        write_all!(writer, b"iso5"); // major_brand
+        write_u32!(writer, 0x200); // minor_version
+        write_all!(writer, b"dash"); // compatible_brand ???
+        write_all!(writer, b"iso5"); // compatible_brand to make dash conformance checker happy.
+        write_all!(writer, b"iso6"); // compatible_brand
+        write_all!(writer, b"mp41"); // compatible_brand
         Ok(())
     }
 }
@@ -93,7 +97,7 @@ impl Mp4Box for MovieExtendsBox {
     }
     fn write_box_payload<W: Write>(&self, mut writer: W) -> Result<()> {
         track_assert!(!self.trex_boxes.is_empty(), ErrorKind::InvalidInput);
-        write_box!(writer, self.mehd_box);
+        // write_box!(writer, self.mehd_box);
         write_boxes!(writer, &self.trex_boxes);
         Ok(())
     }
@@ -277,7 +281,10 @@ impl Mp4Box for TrackHeaderBox {
     }
     fn box_flags(&self) -> Option<u32> {
         // track_enabled | track_in_movie | track_in_preview
-        let flags = 0x00_0001 | 0x00_0002 | 0x00_0004;
+        //let flags = 0x00_0001 | 0x00_0002 | 0x00_0004;
+
+        // track_enabled | track_in_movie
+        let flags = 0x00_0001 | 0x00_0002;
         Some(flags)
     }
     fn box_payload_size(&self) -> Result<u32> {
@@ -426,9 +433,9 @@ pub struct HandlerReferenceBox {
 impl HandlerReferenceBox {
     fn new(is_video: bool) -> Self {
         let name = if is_video {
-            "Video Handler"
+            "VideoHandler"
         } else {
-            "Sound Handler"
+            "SoundHandler"
         };
         HandlerReferenceBox {
             handler_type: if is_video { *b"vide" } else { *b"soun" },
@@ -796,6 +803,12 @@ impl Mp4Box for AvcSampleEntry {
     fn write_box_payload<W: Write>(&self, mut writer: W) -> Result<()> {
         track!(self.write_box_payload_without_avcc(&mut writer))?;
         write_box!(writer, self.avcc_box);
+
+        // pasp
+        write_u32!(writer, 16);
+        write_u32!(writer, 0x7061_7370);
+        write_u32!(writer, 1);
+        write_u32!(writer, 1);
         Ok(())
     }
 }

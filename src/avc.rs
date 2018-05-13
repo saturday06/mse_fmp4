@@ -14,15 +14,14 @@ pub struct AvcDecoderConfigurationRecord {
     pub level_idc: u8,
     pub sequence_parameter_set: Vec<u8>,
     pub picture_parameter_set: Vec<u8>,
+    pub chroma_format_idc: Option<u64>,
+    pub bit_depth_luma_minus8: Option<u64>,
+    pub bit_depth_chroma_minus8: Option<u64>,
 }
 impl AvcDecoderConfigurationRecord {
     pub(crate) fn write_to<W: Write>(&self, mut writer: W) -> Result<()> {
         write_u8!(writer, 1); // configuration_version
 
-        match self.profile_idc {
-            100 | 110 | 122 | 144 => track_panic!(ErrorKind::Unsupported),
-            _ => {}
-        }
         write_u8!(writer, self.profile_idc);
         write_u8!(writer, self.constraint_set_flag);
         write_u8!(writer, self.level_idc);
@@ -35,6 +34,31 @@ impl AvcDecoderConfigurationRecord {
         write_u8!(writer, 0b0000_0001); // num_of_picture_parameter_set_ext
         write_u16!(writer, self.picture_parameter_set.len() as u16);
         write_all!(writer, &self.picture_parameter_set);
+
+        if [100, 110, 122, 144].contains(&self.profile_idc) {
+            let chroma_format_idc = self.chroma_format_idc.expect("chroma_format_idc required");
+            if chroma_format_idc > 3 {
+                panic!("chroma_format_idc = {} > 3", chroma_format_idc);
+            }
+            write_u8!(writer, 0b1111_1100 | chroma_format_idc as u8);
+
+            let bit_depth_luma_minus8 = self.bit_depth_luma_minus8
+                .expect("bit_depth_luma_minus8 required");
+            if bit_depth_luma_minus8 > 7 {
+                panic!("bit_depth_luma_minus8 = {} > 7", bit_depth_luma_minus8);
+            }
+            write_u8!(writer, 0b1111_1000 | bit_depth_luma_minus8 as u8);
+
+            let bit_depth_chroma_minus8 = self.bit_depth_chroma_minus8
+                .expect("bit_depth_chroma_minus8 required");
+            if bit_depth_chroma_minus8 > 7 {
+                panic!("bit_depth_chroma_minus8 = {} > 7", bit_depth_chroma_minus8);
+            }
+            write_u8!(writer, 0b1111_1000 | bit_depth_chroma_minus8 as u8);
+
+            write_u8!(writer, 0); // sps ext count
+        }
+
         Ok(())
     }
 }
